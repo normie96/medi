@@ -1,0 +1,239 @@
+// Prisma schema for MediLens
+// Healthcare Accessibility Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Language {
+  ENGLISH
+  HINDI
+  KHASI
+}
+
+enum ScheduleStatus {
+  UPCOMING
+  TAKEN
+  SKIPPED
+  MISSED
+  COMPLETED
+}
+
+enum ContrastMode {
+  NORMAL
+  HIGH_CONTRAST
+}
+
+enum TextSize {
+  SMALL
+  MEDIUM
+  LARGE
+  XLARGE
+}
+
+enum SpeechSpeed {
+  SLOW
+  NORMAL
+  FAST
+}
+
+model User {
+  id                   String               @id @default(uuid())
+  email                String               @unique
+  passwordHash         String
+  name                 String
+  preferredLanguage    Language             @default(ENGLISH)
+  simpleLanguageMode   Boolean              @default(false)
+  textSize             TextSize             @default(MEDIUM)
+  contrastMode         ContrastMode         @default(NORMAL)
+  speechEnabled        Boolean              @default(true)
+  speechSpeed          SpeechSpeed          @default(NORMAL)
+  speechLanguage       Language             @default(ENGLISH)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  prescriptions        Prescription[]
+  customSchedules      MedicationSchedule[]
+  medicationLogs       MedicationLog[]
+  reminders            Reminder[]
+
+  @@map("users")
+}
+
+model Medicine {
+  id                   String               @id @default(uuid())
+  genericName          String
+  brandName            String
+  strength             String
+  form                 String               // tablet, capsule, syrup, drop, injection
+  drugClass            String
+  generalPurpose       String               // Primary concise purpose
+  usedFor              String               // "Used for: ..." prominently displayed
+  commonUses           String               // Detailed common conditions
+  commonSideEffects    String
+  precautions          String
+  prescriptionRequired Boolean              @default(true)
+  simpleExplanation    String?              // Layman patient-friendly explanation
+  hindiTranslation     String?              // Pre-verified Hindi explanation
+  khasiTranslation     String?              // Pre-verified Khasi explanation
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  prescriptionMedicines PrescriptionMedicine[]
+
+  @@index([genericName])
+  @@index([brandName])
+  @@map("medicines")
+}
+
+model Prescription {
+  id                   String               @id @default(uuid())
+  userId               String
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctorName           String?
+  doctorRegistrationNo String?
+  doctorHospital       String?
+  doctorSpecialty      String?
+  prescriptionDate     DateTime             @default(now())
+  imageUrl             String?
+  rawOcrText           String?
+  ocrConfidence        Float                @default(0.85)
+  isVerifiedByUser     Boolean              @default(false)
+  verificationNotes    String?
+  status               String               @default("ACTIVE") // ACTIVE, ARCHIVED, EXPIRED
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  medicines            PrescriptionMedicine[]
+
+  @@index([userId])
+  @@map("prescriptions")
+}
+
+// Immutable Prescribed Medicine as extracted/verified from the Doctor's prescription
+model PrescriptionMedicine {
+  id                   String               @id @default(uuid())
+  prescriptionId       String
+  prescription         Prescription         @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicineId           String?
+  matchedMedicine      Medicine?            @relation(fields: [medicineId], references: [id])
+  
+  // VERIFIED PRESCRIPTION DATA (Medical Prescribed Truth)
+  prescribedName       String
+  prescribedStrength   String
+  prescribedDose       String               // e.g. "1 tablet"
+  prescribedFrequency  String               // e.g. "once daily", "twice daily"
+  prescribedTiming     String               // e.g. "before breakfast", "after food"
+  prescribedDuration   String               // e.g. "5 days", "30 days"
+  specialInstructions  String?
+  confidenceScore      Float                @default(0.9)
+  
+  // User customizable schedule records linked to this prescribed medicine
+  schedules            MedicationSchedule[]
+
+  @@index([prescriptionId])
+  @@map("prescription_medicines")
+}
+
+// USER CUSTOMIZABLE SCHEDULE DATA (Does not overwrite doctor's medical prescription)
+model MedicationSchedule {
+  id                     String               @id @default(uuid())
+  userId                 String
+  user                   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prescriptionMedicineId String
+  prescriptionMedicine   PrescriptionMedicine @relation(fields: [prescriptionMedicineId], references: [id], onDelete: Cascade)
+  
+  // User Preference / Customization Schedule Fields
+  doseSlot               String               // "Morning", "Afternoon", "Evening", "Night", or "Custom"
+  scheduledTime          String               // e.g. "08:00 AM" (user can change 08:00 to 07:30)
+  reminderEnabled        Boolean              @default(true)
+  reminderMinutesBefore  Int                  @default(15)
+  startDate              DateTime
+  endDate                DateTime
+  foodInstructionNote    String?
+  scheduleNote           String?              // User private note
+  isCustomizedByUser     Boolean              @default(false)
+  
+  // Status tracking for the schedule instance
+  status                 ScheduleStatus       @default(UPCOMING)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  logs                   MedicationLog[]
+
+  @@index([userId])
+  @@index([prescriptionMedicineId])
+  @@map("medication_schedules")
+}
+
+model MedicationLog {
+  id                   String               @id @default(uuid())
+  userId               String
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleId           String
+  schedule             MedicationSchedule   @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  logDate              DateTime             @default(now())
+  status               ScheduleStatus       // TAKEN, SKIPPED
+  takenAt              DateTime?
+  notes                String?
+
+  @@index([userId])
+  @@index([scheduleId])
+  @@map("medication_logs")
+}
+
+model Doctor {
+  id                   String               @id @default(uuid())
+  name                 String
+  registrationNumber   String               @unique
+  specialty            String               // "Child Specialist", "Cardiologist", "General Physician", etc.
+  qualification        String               // "MBBS, MD"
+  hospitalOrClinic     String
+  address              String
+  city                 String
+  state                String
+  phone                String
+  openingHours         String
+  latitude             Float
+  longitude            Float
+  isVerified           Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([specialty])
+  @@index([city])
+  @@map("doctors")
+}
+
+model Reminder {
+  id                   String               @id @default(uuid())
+  userId               String
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleId           String
+  time                 String               // "08:00 AM"
+  isEnabled            Boolean              @default(true)
+  channel              String               @default("APP") // APP, SOUND, PUSH
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([userId])
+  @@map("reminders")
+}
+
+model TranslationCache {
+  id                   String               @id @default(uuid())
+  sourceTextHash       String               @unique
+  sourceLanguage       String
+  targetLanguage       String
+  translatedText       String
+  isVerified           Boolean              @default(false)
+  createdAt            DateTime             @default(now())
+
+  @@index([sourceLanguage, targetLanguage])
+  @@map("translation_cache")
+}

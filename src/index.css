@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+}
+
+/* Accessibility Text Size Classes */
+html.text-size-small {
+  font-size: 14px;
+}
+
+html.text-size-medium {
+  font-size: 16px;
+}
+
+html.text-size-large {
+  font-size: 18px;
+}
+
+html.text-size-xlarge {
+  font-size: 20px;
+}
+
+/* High Contrast Styling */
+html.high-contrast {
+  color-scheme: dark;
+}
+
+html.high-contrast body {
+  background-color: #0f172a;
+  color: #f8fafc;
+}

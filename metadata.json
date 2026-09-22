@@ -1,0 +1,12 @@
+{
+  "name": "MediLens",
+  "description": "Healthcare accessibility platform to understand prescriptions, identify medicines, customize medication schedules, find doctors, and provide multilingual instructions in English, Hindi, and Khasi.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
